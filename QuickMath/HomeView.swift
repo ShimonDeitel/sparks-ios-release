@@ -11,111 +11,136 @@ struct HomeView: View {
     @State private var showInsights = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                QMBackground()
-
+        ZStack {
+            QMBackground()
+            NavigationStack {
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Header
-                        VStack(spacing: 4) {
-                            Text("Tideline")
-                                .font(.largeTitle.weight(.bold))
-                            Text("Ride your daily mood wave")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 8)
-
-                        // Today's entry card
-                        GridView()
-                            .padding(.horizontal, 16)
+                        // Today's question card
+                        todayCard
 
                         // Stats row
                         HStack(spacing: 12) {
                             MetricTile(
-                                value: appModel.todayEntry.map { "\($0.level)" } ?? "-",
-                                label: "Today"
+                                value: "\(appModel.allPrompts.count)",
+                                label: "Questions"
                             )
                             MetricTile(
-                                value: String(format: "%.1f", appModel.sevenDayAverage),
-                                label: "7-day avg"
+                                value: "\(appModel.favorites.count)",
+                                label: "Saved"
                             )
                             MetricTile(
-                                value: "\(appModel.currentStreak)",
-                                label: "Streak"
+                                value: "\(appModel.savedAnswers.count)",
+                                label: "Exchanges"
                             )
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal)
 
                         // Pro tile
                         Button {
-                            if store.isPro {
-                                showInsights = true
-                            } else {
-                                showPaywall = true
-                            }
+                            Haptics.tap()
+                            if store.isPro { showInsights = true }
+                            else { showPaywall = true }
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(store.isPro ? "Tideline Pro" : "Unlock Insights")
-                                        .font(.headline)
-                                    Text(store.isPro ? "History, dual-wave & trends" : "Multi-month history + dual-wave")
-                                        .font(.caption)
+                                    Text(store.isPro ? "Sparks Pro" : "Unlock Sparks Pro")
+                                        .font(.headline.weight(.semibold))
+                                    Text(store.isPro
+                                         ? "Archive, memory log & bonus questions"
+                                         : "Full archive, memory log & bonus questions")
+                                        .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Image(systemName: store.isPro ? "waveform.path.ecg" : "lock.fill")
+                                Image(systemName: store.isPro ? "star.fill" : "lock.fill")
                                     .foregroundStyle(Color.qmAccent)
                                     .font(.title3)
                             }
-                            .qmCard()
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
+                        .qmCard()
+                        .padding(.horizontal)
 
                         Spacer(minLength: 32)
                     }
+                    .padding(.top, 8)
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(Color.qmAccent)
+                .navigationTitle("Sparks")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .foregroundStyle(Color.qmAccent)
+                        }
                     }
                 }
             }
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-                    .environmentObject(store)
-                    .environmentObject(appModel)
-            }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-                    .environmentObject(store)
-            }
-            .sheet(isPresented: $showInsights) {
-                InsightsView()
-                    .environmentObject(appModel)
-                    .environmentObject(store)
-            }
-            .onAppear {
-                handleForceScreen()
-            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(appModel)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showInsights) {
+            InsightsView()
+                .environmentObject(appModel)
+                .environmentObject(store)
+        }
+        .onAppear {
+            if forceScreen == "paywall" { showPaywall = true }
+            if forceScreen == "insights" { showInsights = true }
         }
     }
 
-    private func handleForceScreen() {
-        guard let screen = forceScreen else { return }
-        switch screen {
-        case "paywall": showPaywall = true
-        case "insights": showInsights = true
-        case "settings": showSettings = true
-        default: break
+    // MARK: Today's question card
+    @ViewBuilder
+    private var todayCard: some View {
+        NavigationLink {
+            GridView()
+                .environmentObject(appModel)
+                .environmentObject(store)
+        } label: {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    themeTag(appModel.todayPrompt?.theme ?? "deep")
+                    Spacer()
+                    Text("Today")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(appModel.todayPrompt?.text ?? "Loading today's question…")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    Spacer()
+                    Label("Open", systemImage: "arrow.right.circle")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.qmAccent)
+                }
+            }
         }
+        .qmCard()
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func themeTag(_ theme: String) -> some View {
+        Text(theme.capitalized)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.qmAccent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color.qmAccent.opacity(0.12), in: Capsule())
     }
 }

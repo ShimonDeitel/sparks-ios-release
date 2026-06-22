@@ -4,105 +4,103 @@ struct PaywallView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
 
-    private let benefits = [
-        ("clock.arrow.circlepath", "Unlimited multi-month wave history and zoom"),
-        ("waveform.path.ecg", "Morning vs evening dual-wave comparison"),
-        ("lightbulb", "Best-time-of-day insights and gentle daily nudge")
+    private let benefits: [(icon: String, text: String)] = [
+        ("archivebox", "Full searchable archive of every past daily question by theme"),
+        ("text.bubble.fill", "Save answers and exchanges to build a private memory log per person"),
+        ("star.fill", "Three bonus questions a day plus pick-your-theme decks and reminder time"),
     ]
 
     var body: some View {
         NavigationStack {
             ZStack {
                 QMBackground()
-
                 ScrollView {
                     VStack(spacing: 28) {
-                        // Icon + title
-                        VStack(spacing: 12) {
-                            Image(systemName: "waveform.path.ecg")
-                                .font(.system(size: 56, weight: .thin))
+                        // Header
+                        VStack(spacing: 10) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(.system(size: 56))
                                 .foregroundStyle(Color.qmAccent)
+                                .padding(.top, 32)
 
-                            Text("Tideline Pro")
-                                .font(.largeTitle.weight(.bold))
+                            Text("Sparks Pro")
+                                .font(.title.weight(.bold))
 
-                            Text("$0.99 / month. Auto-renews until you cancel.")
+                            Text("\(store.displayPrice) / month. Auto-renews until you cancel.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding(.top, 16)
 
-                        // Benefits
-                        VStack(spacing: 0) {
-                            ForEach(Array(benefits.enumerated()), id: \.offset) { idx, benefit in
-                                HStack(spacing: 14) {
-                                    Image(systemName: benefit.0)
+                        // Benefit rows
+                        VStack(spacing: 16) {
+                            ForEach(benefits, id: \.text) { benefit in
+                                HStack(alignment: .top, spacing: 16) {
+                                    Image(systemName: benefit.icon)
+                                        .font(.title3)
                                         .foregroundStyle(Color.qmAccent)
                                         .frame(width: 28)
-                                    Text(benefit.1)
+                                    Text(benefit.text)
                                         .font(.subheadline)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Spacer()
                                 }
-                                .padding(.vertical, 14)
-                                .padding(.horizontal, 16)
-
-                                if idx < benefits.count - 1 {
-                                    Divider().padding(.leading, 58)
-                                }
                             }
                         }
-                        .background(Color.qmCard, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .padding(.horizontal, 16)
+                        .qmCard()
+                        .padding(.horizontal)
 
-                        // Unlock button
-                        Button {
-                            Task {
-                                await store.purchase()
-                            }
-                        } label: {
-                            HStack(spacing: 8) {
-                                if store.purchaseInFlight {
-                                    ProgressView()
-                                        .tint(.white)
+                        // CTA
+                        VStack(spacing: 14) {
+                            Button {
+                                Task {
+                                    await store.purchase()
                                 }
-                                Text("Unlock for \(store.displayPrice)/month")
+                            } label: {
+                                Group {
+                                    if store.purchaseInFlight {
+                                        ProgressView()
+                                            .tint(.white)
+                                    } else {
+                                        Text("Unlock Sparks Pro")
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .prominentButton()
+                            .disabled(store.purchaseInFlight)
+
+                            Button {
+                                Task { await store.restore() }
+                            } label: {
+                                Text("Restore purchase")
                                     .frame(maxWidth: .infinity)
                             }
+                            .softButton()
                         }
-                        .prominentButton()
-                        .disabled(store.purchaseInFlight)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal)
 
-                        // Restore
-                        Button("Restore Purchase") {
-                            Task { await store.restore() }
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(Color.qmAccent)
-
-                        // Legal
-                        VStack(spacing: 8) {
-                            Text("Subscription automatically renews each month at \(store.displayPrice) unless cancelled at least 24 hours before the renewal date. Manage or cancel anytime in your Apple Account subscriptions.")
-                                .font(.caption)
+                        // Disclosure
+                        VStack(spacing: 10) {
+                            Text("Subscription automatically renews at \(store.displayPrice)/month unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in your Apple Account settings.")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
 
-                            HStack(spacing: 16) {
-                                Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.qmAccent)
-                                Link("Privacy Policy", destination: URL(string: "https://shimondeitel.github.io/tideline-site/privacy.html")!)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.qmAccent)
+                            HStack(spacing: 20) {
+                                Link("Terms", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                                    .font(.caption2)
+                                Link("Privacy", destination: URL(string: "https://shimondeitel.github.io/sparks-site/privacy.html")!)
+                                    .font(.caption2)
                             }
+                            .foregroundStyle(Color.qmAccent)
                         }
                         .padding(.horizontal, 24)
-
-                        Spacer(minLength: 16)
+                        .padding(.bottom, 32)
                     }
                 }
             }
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

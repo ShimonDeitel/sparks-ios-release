@@ -1,82 +1,99 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var store: Store
     @EnvironmentObject var appModel: AppModel
+    @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("quickmath.theme") private var themeRaw = AppTheme.system.rawValue
-
     @State private var showPaywall = false
     @State private var showDeleteConfirm = false
-
-    private var theme: Binding<AppTheme> {
-        Binding(
-            get: { AppTheme(rawValue: themeRaw) ?? .system },
-            set: { themeRaw = $0.rawValue }
-        )
-    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 QMBackground()
-
                 List {
-                    // Pro section
+                    // MARK: Pro
                     Section("Subscription") {
                         if store.isPro {
                             HStack {
-                                Text("Tideline Pro")
-                                Spacer()
-                                Text("Active")
-                                    .foregroundStyle(Color.qmCorrect)
-                                    .font(.subheadline.weight(.medium))
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(Color.qmAccent)
+                                Text("Sparks Pro — Active")
+                                    .font(.headline)
                             }
-                            Link("Manage Subscription",
-                                 destination: URL(string: "https://apps.apple.com/account/subscriptions")!)
-                                .foregroundStyle(Color.qmAccent)
+                            Link(destination: URL(string: "https://apps.apple.com/account/subscriptions")!) {
+                                Label("Manage subscription", systemImage: "arrow.up.right")
+                            }
+                            .foregroundStyle(Color.qmAccent)
                         } else {
-                            Button("Unlock Tideline Pro") {
+                            Button {
                                 showPaywall = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "lock.open.fill")
+                                        .foregroundStyle(Color.qmAccent)
+                                    Text("Unlock Sparks Pro")
+                                        .font(.headline)
+                                        .foregroundStyle(Color.qmAccent)
+                                }
                             }
-                            .foregroundStyle(Color.qmAccent)
+                            Button {
+                                Task { await store.restore() }
+                            } label: {
+                                Label("Restore purchase", systemImage: "arrow.clockwise")
+                            }
+                            .foregroundStyle(.primary)
                         }
-
-                        Button("Restore Purchase") {
-                            Task { await store.restore() }
-                        }
-                        .foregroundStyle(Color.qmAccent)
                     }
+                    .listRowBackground(Color.qmCard)
 
-                    // Appearance
+                    // MARK: Appearance
                     Section("Appearance") {
-                        Picker("Theme", selection: theme) {
-                            ForEach(AppTheme.allCases) { t in
-                                Text(t.label).tag(t)
+                        Picker("Theme", selection: $themeRaw) {
+                            ForEach(AppTheme.allCases) { theme in
+                                Text(theme.label).tag(theme.rawValue)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.menu)
                     }
+                    .listRowBackground(Color.qmCard)
 
-                    // Legal
-                    Section("Legal") {
-                        Link("Privacy Policy",
-                             destination: URL(string: "https://shimondeitel.github.io/tideline-site/privacy.html")!)
-                            .foregroundStyle(Color.qmAccent)
-                        Link("Terms of Use",
-                             destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-                            .foregroundStyle(Color.qmAccent)
-                    }
-
-                    // Data
-                    Section("Data") {
-                        Button("Delete All Data") {
-                            showDeleteConfirm = true
+                    // MARK: Reminders
+                    Section("Reminders") {
+                        NavigationLink {
+                            ReminderSettingsView()
+                        } label: {
+                            Label("Daily reminder", systemImage: "bell")
                         }
-                        .foregroundStyle(Color.qmWrong)
                     }
+                    .listRowBackground(Color.qmCard)
+
+                    // MARK: Legal
+                    Section("Legal") {
+                        Link(destination: URL(string: "https://shimondeitel.github.io/sparks-site/privacy.html")!) {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                        }
+                        .foregroundStyle(.primary)
+                        Link(destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!) {
+                            Label("Terms of Service", systemImage: "doc.text")
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                    .listRowBackground(Color.qmCard)
+
+                    // MARK: Data
+                    Section("Data") {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete all data", systemImage: "trash")
+                        }
+                    }
+                    .listRowBackground(Color.qmCard)
                 }
+                .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
@@ -87,21 +104,66 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallView()
-                    .environmentObject(store)
+                PaywallView().environmentObject(store)
             }
             .confirmationDialog(
-                "Delete all Tideline data?",
+                "Delete all saved data?",
                 isPresented: $showDeleteConfirm,
                 titleVisibility: .visible
             ) {
-                Button("Delete All", role: .destructive) {
+                Button("Delete everything", role: .destructive) {
                     appModel.deleteAllData()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes all your logged energy entries and cannot be undone.")
+                Text("This removes all saved answers, favourites, and re-seeds the question library. This cannot be undone.")
             }
         }
+    }
+}
+
+// MARK: - Reminder sub-screen
+
+struct ReminderSettingsView: View {
+    @State private var enabled = false
+    @State private var time = Date(timeIntervalSinceReferenceDate: 8 * 3600) // 8 AM
+
+    var body: some View {
+        ZStack {
+            QMBackground()
+            Form {
+                Section {
+                    Toggle("Daily reminder", isOn: $enabled)
+                        .onChange(of: enabled) { _, on in
+                            if on {
+                                Task {
+                                    let ok = await Reminders.requestAuthorization()
+                                    if ok { scheduleReminder() }
+                                    else { enabled = false }
+                                }
+                            } else {
+                                Reminders.cancel()
+                            }
+                        }
+
+                    if enabled {
+                        DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                            .onChange(of: time) { _, _ in scheduleReminder() }
+                    }
+                } footer: {
+                    Text("A gentle nudge to share today's question with someone you care about.")
+                }
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .navigationTitle("Reminder")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func scheduleReminder() {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: time)
+        let m = cal.component(.minute, from: time)
+        Reminders.schedule(hour: h, minute: m)
     }
 }
